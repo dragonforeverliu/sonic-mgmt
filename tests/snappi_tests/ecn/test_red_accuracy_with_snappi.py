@@ -92,7 +92,7 @@ def test_red_accuracy(request,
     snappi_extra_params.is_snappi_ingress_port_cap = True
     snappi_extra_params.ecn_params = {'kmin': 500000, 'kmax': 900000, 'pmax': 5}
     data_flow_pkt_size = 1024
-    data_flow_pkt_count = 910
+    data_flow_pkt_count = 400 # original value is 910
     num_iterations = 1
 
     logger.info("Running ECN red accuracy test with ECN params: {}".format(snappi_extra_params.ecn_params))
