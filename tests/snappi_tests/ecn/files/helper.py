@@ -883,7 +883,7 @@ def run_ecn_marking_with_pfc_quanta_variance(
 
     start_quanta = 500
     end_quanta = 65000
-    n = 15  # Number of quanta values
+    n = 2  # Number of quanta values, original is 15, change to 2 to have a try
 
     step = (end_quanta - start_quanta) // (n - 1)
     # Generate all but the last value
