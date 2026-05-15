@@ -209,7 +209,6 @@ def __tgen_bgp_config(snappi_api,
         dual_stack_flag: notation for dual or single stack
     """
     config = snappi_api.config()
-    snappi_api.enable_scaling(True)
     p1, p2 = (
         config.ports.port(name="Source", location=temp_tg_port[0]['location'])
         .port(name="Destination", location=temp_tg_port[1]['location'])
@@ -608,9 +607,6 @@ def get_bgp_scalability_result(snappi_api, localhost, bgp_config, flag, duthost)
         bgp_config: tgen_bgp_config
     """
     snappi_api.set_config(bgp_config)
-    ixnet = snappi_api._ixnetwork
-    if str(ixnet.Locations.find()[0].DeviceType) == 'Optixia XV':
-        ixnet.Traffic.Statistics.CpdpConvergence.EnableDataPlaneEventsRateMonitor = False
     warning = run_traffic(snappi_api, duthost)
     if warning == 1:
         msg = "THRESHOLD_EXCEEDED warning message observed in syslog"
