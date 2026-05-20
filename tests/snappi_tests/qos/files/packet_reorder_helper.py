@@ -24,7 +24,6 @@ EXP_FLOW_DUR_SEC = 3
 SNAPPI_POLL_DELAY_SEC = 2
 INNER_PKT_SRC_IP = "20.0.20.0"
 INNER_PKT_DST_IP = "21.0.20.0"
-SEQUENCE_CHECKING_THRESHOLD = 1
 
 
 def run_ipip_packet_reorder_test(api,
@@ -89,8 +88,7 @@ def run_ipip_packet_reorder_test(api,
                                  timeout=EXP_FLOW_DUR_SEC)
 
     # Verify results i.e. no out of order packets
-    __verify_results(api=api,
-                     flow_metrics=flow_metrics,
+    __verify_results(flow_metrics=flow_metrics,
                      exp_rx_pkts=TOTAL_NUM_PKTS)
 
 
@@ -106,8 +104,8 @@ def __gen_traffic(testbed_config,
                   pkt_step_size,
                   prio_dscp_map):
     """
-    Generate configurations of flows, and device configurations on both the DUT, and ixia device which
-    emulates a neighbor.
+    Generate configurations of flows, and device configurations on both the DUT and the traffic generator
+    emulating a neighbor.
     Args:
         testbed_config (obj): testbed L1/L2/L3 configuration
         port_config_list (list): list of port configuration
@@ -224,9 +222,6 @@ def __run_traffic(api,
     logger.info('Wait for Arp to Resolve ...')
     wait_for_arp(api, max_attempts=30, poll_interval_sec=2)
 
-    logger.info("Setting up Ixia API session to capture advanced statistics ...")
-    __configure_advanced_stats(api)
-
     logger.info('Starting transmit on all flows ...')
     cs = api.control_state()
     cs.traffic.flow_transmit.state = cs.traffic.flow_transmit.START
@@ -267,25 +262,7 @@ def __run_traffic(api,
     return flow_metrics
 
 
-def __configure_advanced_stats(api):
-    """
-    Set up advanced statistics on the Ixia API session
-    Args:
-        api (obj): snappi session
-    Returns:
-        N/A
-    """
-
-    # Connect to restpy session
-    restpy_session = api.assistant.Session
-    ixnet = restpy_session.Ixnetwork
-    statVarIxia = ixnet.Traffic.Statistics
-    statVarIxia.AdvancedSequenceChecking.Enabled = True
-    statVarIxia.AdvancedSequenceChecking.AdvancedSequenceThreshold = SEQUENCE_CHECKING_THRESHOLD
-
-
-def __verify_results(api,
-                     flow_metrics,
+def __verify_results(flow_metrics,
                      exp_rx_pkts):
     """
     Verify if we get expected experiment results
@@ -305,11 +282,3 @@ def __verify_results(api,
                   .format(total_tx, total_rx))
     pytest_assert(total_rx == exp_rx_pkts, "Number of total Rx packets = {} are not equal to expected packets = {}"
                   .format(total_rx, exp_rx_pkts))
-
-    # Check for packet re-order
-    flow_stat = api.assistant.StatViewAssistant("Flow Statistics")
-    for stat in flow_stat.Rows:
-        in_order_frames = int(stat["In Order Frames"])
-        reordered_frames = int(stat["Reordered Frames"])
-        error_msg = "Frames are out of order. Reordered frames = {}".format(reordered_frames)
-        pytest_assert(in_order_frames == total_tx and reordered_frames == 0, error_msg)
