@@ -475,35 +475,31 @@ def __portchannel_intf_config(config, port_config_list, duthost, snappi_ports):
 
 
 @pytest.fixture(scope="module")
-def is_pfc_enabled(duthosts, rand_one_dut_front_end_hostname):
+def rand_one_dut_snappi_portname_oper_up(conn_graph_facts, fanout_graph_facts,  # noqa: F811
+                                         rand_one_dut_hostname):
     """
-    This fixture checks if Priority Flow Control (PFC) is enabled on the SONiC DUT.
-
-    Args:
-        duthosts (pytest fixture): List of DUT hosts.
-        rand_one_dut_front_end_hostname (pytest fixture): Hostname of a randomly selected front-end DUT.
-
-    Returns:
-        bool: True if PFC is enabled on at least one port, False otherwise.
+    Return a random operationally-up DUT port that is wired to the Snappi chassis,
+    in 'dut_hostname|port_name' format.  This prevents the generic
+    rand_one_dut_portname_oper_up fixture from accidentally picking a port that is
+    not connected to the traffic generator, which would silently skip every test.
     """
-    duthost = duthosts[rand_one_dut_front_end_hostname]
-    config_facts = duthost.config_facts(host=duthost.hostname, asic_index=0,
-                                        source="running")['ansible_facts']
+    snappi_fanout = get_peer_snappi_chassis(conn_data=conn_graph_facts,
+                                            dut_hostname=rand_one_dut_hostname)
+    pytest_assert(snappi_fanout is not None,
+                  'No Snappi chassis found for DUT {}'.format(rand_one_dut_hostname))
 
-    if "PORT_QOS_MAP" not in list(config_facts.keys()):
-        return False
+    snappi_fanout_id = list(fanout_graph_facts.keys()).index(snappi_fanout)
+    snappi_fanout_list = SnappiFanoutManager(fanout_graph_facts)
+    snappi_fanout_list.get_fanout_device_details(device_number=snappi_fanout_id)
 
-    port_qos_map = config_facts["PORT_QOS_MAP"]
-    if len(list(port_qos_map.keys())) == 0:
-        return False
+    snappi_ports = snappi_fanout_list.get_ports(peer_device=rand_one_dut_hostname)
+    snappi_port_names = [p['peer_port'] for p in snappi_ports]
 
-    # Here we assume all the ports have the same lossless priorities
-    intf = list(port_qos_map.keys())[0]
-    pfc_enable = port_qos_map[intf].get('pfc_enable')
-    if pfc_enable:
-        return True
+    pytest_assert(len(snappi_port_names) > 0,
+                  'No ports on DUT {} are connected to the Snappi chassis'.format(rand_one_dut_hostname))
 
-    return False
+    chosen = random.choice(snappi_port_names)
+    return '{}|{}'.format(rand_one_dut_hostname, chosen)
 
 
 @pytest.fixture(scope="function")
