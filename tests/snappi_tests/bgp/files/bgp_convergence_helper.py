@@ -550,17 +550,21 @@ def __tgen_bgp_config(snappi_api,
         flow1.metrics.loss = True
 
     if route_type == 'IPv4':
-        tx_flow, rx_flow = create_v4_topo()
-        createTrafficItem("IPv4 Traffic", tx_flow, rx_flow, 100)
+        rx_flows = create_v4_topo()
+        flow = config.flows.flow(name='IPv4 Traffic')[-1]
+        ipv4_1 = config.devices[0].ethernets[0].ipv4_addresses[0]
+        flow.tx_rx.device.tx_names = [ipv4_1.name]
     elif route_type == 'IPv6':
-        tx_flow, rx_flow = create_v6_topo()
-        createTrafficItem("IPv6 Traffic", tx_flow, rx_flow, 100)
-    elif route_type == 'IPv4v6':
-        v4_tx_flow, v6_tx_flow, v4_rx_flow, v6_rx_flow = create_v4v6_topo()
-        createTrafficItem("IPv4 Traffic", v4_tx_flow, v4_rx_flow, 50)
-        createTrafficItem("IPv6 Traffic", v6_tx_flow, v6_rx_flow, 50)
+        rx_flows = create_v6_topo()
+        flow = config.flows.flow(name='IPv6 Traffic')[-1]
+        ipv6_1 = config.devices[0].ethernets[0].ipv6_addresses[0]
+        flow.tx_rx.device.tx_names = [ipv6_1.name]
     else:
         raise Exception('Invalid route type given')
+    flow.tx_rx.device.rx_names = rx_flows
+    flow.size.fixed = 1024
+    flow.rate.percentage = 100
+    flow.metrics.enable = True
     return config
 
 
@@ -1041,12 +1045,15 @@ def get_RIB_IN_capacity(snappi_api,
         if route_type == 'IPv4':
             rx_flows = create_v4_topo()
             flow = config.flows.flow(name='IPv4_Traffic_%d' % routes)[-1]
+            ipv4_1 = config.devices[0].ethernets[0].ipv4_addresses[0]
+            flow.tx_rx.device.tx_names = [ipv4_1.name]
         elif route_type == 'IPv6':
             rx_flows = create_v6_topo()
             flow = config.flows.flow(name='IPv6_Traffic_%d' % routes)[-1]
+            ipv6_1 = config.devices[0].ethernets[0].ipv6_addresses[0]
+            flow.tx_rx.device.tx_names = [ipv6_1.name]
         else:
             raise Exception('Invalid route type given')
-        flow.tx_rx.device.tx_names = [config.devices[0].name]
         flow.tx_rx.device.rx_names = rx_flows
         flow.size.fixed = 1024
         flow.rate.percentage = 100
