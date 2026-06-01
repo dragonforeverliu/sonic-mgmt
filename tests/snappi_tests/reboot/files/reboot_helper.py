@@ -549,6 +549,11 @@ def get_convergence_for_reboot_test(duthost,
     ping_req = snappi_api.control_action()
     ping_req.protocol.ipv4.ping.requests.add(src_name='IPv4 3', dst_ip="1.1.1.1")
 
+    # ping 3 times before reboot
+    for i in range(3):
+        responses = ping_loopback_if(snappi_api, ping_req)
+        logger.info("Ping {} response: {}".format(i + 1, responses))
+
     logger.info("Issuing a {} reboot on the dut {}".format(
         reboot_type, duthost.hostname))
     Thread(target=reboot, args=([duthost, localhost, reboot_type])).start()
