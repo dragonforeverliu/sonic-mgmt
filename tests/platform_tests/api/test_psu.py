@@ -160,6 +160,7 @@ class TestPsuApi(PlatformApiTestBase):
             status = psu.get_status(platform_api_conn, i)
             if self.expect(status is not None, "Unable to retrieve PSU {} status".format(i)):
                 self.expect(isinstance(status, bool), "PSU {} status appears incorrect".format(i))
+                self.expect(status is True, "PSU {} status is not True (Power Not Good)".format(i))
         self.assert_expectations()
 
     def test_get_position_in_parent(self, platform_api_conn):     # noqa: F811
@@ -252,8 +253,10 @@ class TestPsuApi(PlatformApiTestBase):
                 self.expect(check_result, "PSU {} reading does not make sense \
                 (power:{}, voltage:{}, current:{})".format(psu_id, power, voltage, current))
 
-                self.get_psu_parameter(psu_info, "max_power", psu.get_maximum_supplied_power,
-                                       "maximum supplied power")
+                # This platform doesn't support this API.
+                if "arm64-c8220tg_48a_o" not in duthost.facts['platform']:
+                    self.get_psu_parameter(psu_info, "max_power", psu.get_maximum_supplied_power,
+                                           "maximum supplied power")
 
                 powergood_status = psu.get_powergood_status(platform_api_conn, psu_id)
                 if self.expect(powergood_status is not None,
