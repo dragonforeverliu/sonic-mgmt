@@ -1156,6 +1156,7 @@ def get_convergence_for_process_crash(duthosts,
     bgp_peer_names = _collect_bgp_peer_names(bgp_config)
 
     convergence_result = []
+    table = []
     logger.info('\n')
     logger.info('Testing with Route Range: {}'.format(route_range))
     logger.info('\n')
@@ -1178,8 +1179,7 @@ def get_convergence_for_process_crash(duthosts,
 
     wait(SNAPPI_TRIGGER, "For Protocols To start")
     logger.info('Verifying protocol sessions state')
-    protocolsSummary = StatViewAssistant(ixnetwork, 'Protocols Summary')
-    protocolsSummary.CheckCondition('Sessions Down', StatViewAssistant.EQUAL, 0)
+    _wait_bgp_sessions_up(api, bgp_peer_names)
 
     # Wait for DUT to be ready before receiving traffic
     time.sleep(60)
@@ -1294,13 +1294,24 @@ def get_convergence_for_process_crash(duthosts,
                     row.append(f'{process_name}')
                     row.append(iteration)
                     row.append(traffic_type)
-                    row.append(portchannel_count)
+                    row.append(pc_count)
                     row.append(total_routes)
                     row.append(mean(avg_pld))
                     table.append(row)
+                    convergence_result.append({
+                        "Test Name": test_name,
+                        "Container Name": container,
+                        "Process Name": process_name,
+                        "Iterations": iteration,
+                        "Traffic Type": traffic_type,
+                        "Uplink ECMP Paths": pc_count,
+                        "Route Count": total_routes,
+                        "Avg Calculated Packet Loss Duration (ms)": mean(avg_pld)
+                    })
     columns = ['Test Name', 'Container Name', 'Process Name', 'Iterations', 'Traffic Type',
                'Uplink ECMP Paths', 'Route Count', 'Avg Calculated Packet Loss Duration (ms)']
     logger.info("\n%s" % tabulate(table, headers=columns, tablefmt="psql"))
+    record_property("convergence_result", convergence_result)
 
 
 def get_convergence_for_tsa_tsb(duthosts,
@@ -1552,34 +1563,6 @@ def get_convergence_for_blackout(duthosts,
     logger.info('\n')
     logger.info('Testing with Route Range: {}'.format(route_range))
     logger.info('\n')
-    for i in range(0, iteration):
-        logger.info(
-            '|--------------------------- Iteration : {} -----------------------|'.format(i+1))
-        logger.info("Starting all protocols ...")
-        cs = api.control_state()
-        cs.protocol.all.state = cs.protocol.all.START
-        api.set_control_state(cs)
-        wait(SNAPPI_TRIGGER, "For Protocols To start")
-        logger.info('Verifying protocol sessions state')
-        _wait_bgp_sessions_up(api, bgp_peer_names)
-        logger.info('Starting Traffic')
-        cs.traffic.flow_transmit.state = cs.traffic.flow_transmit.START
-        api.set_control_state(cs)
-        wait(SNAPPI_TRIGGER, "For Traffic To start")
-
-        flow_stats = get_flow_stats(api)
-        port_stats = get_port_stats(api)
-
-        logger.info('\n')
-        logger.info('Rx Snappi Port Name : Rx Frame Rate')
-        for port_stat in port_stats:
-            if 'Snappi_Tx_Port' not in port_stat.name:
-                logger.info('{} : {}'.format(port_stat.name, port_stat.frames_rx_rate))
-                pytest_assert(port_stat.frames_rx_rate > 0, '{} is not receiving any packet'.format(port_stat.name))
-        logger.info('\n')
-        for i in range(0, len(traffic_type)):
-            logger.info('{} Loss %: {}'.format(flow_stats[i].name, int(flow_stats[i].loss)))
-            pytest_assert(int(flow_stats[i].loss) == 0, f'Loss Observed in {flow_stats[i].name} before link Flap')
 
     # Start protocols once
     logger.info("Starting all protocols ...")
@@ -1588,8 +1571,7 @@ def get_convergence_for_blackout(duthosts,
     api.set_control_state(cs)
     wait(SNAPPI_TRIGGER, "For Protocols To start")
     logger.info('Verifying protocol sessions state')
-    protocolsSummary = StatViewAssistant(ixnetwork, 'Protocols Summary')
-    protocolsSummary.CheckCondition('Sessions Down', StatViewAssistant.EQUAL, 0)
+    _wait_bgp_sessions_up(api, bgp_peer_names)
 
     # Start traffic once
     logger.info('Starting Traffic')
@@ -1638,12 +1620,7 @@ def get_convergence_for_blackout(duthosts,
                     if 'Snappi_Uplink' in port_stat.name:
                         sum_t2_rx_frame_rate = sum_t2_rx_frame_rate + int(port_stat.frames_rx_rate)
 
-                # Clear stats before flap
-                logger.info('Performing Clear Stats before flap')
-                ixnetwork.ClearStats()
-                wait(2, "For stats to clear")
-
-                # Link Down
+                # Note: OTG tracks cumulative tx/rx counters; delta calculation handles stat reset implicitly
                 portchannel_dict = {}
                 uplink_portchannel_members = get_uplink_portchannel_members(topology_type, vendor)
                 for asic_value, portchannel_info in uplink_portchannel_members.items():
@@ -1670,33 +1647,16 @@ def get_convergence_for_blackout(duthosts,
                     port_idx = int(snappi_port['name'].split('_')[3])
                     if port_idx in flapped_po_indices:
                         snappi_port_names.append(snappi_port['name'])
-        if fanout_presence is False:
-            for snappi_port_name in snappi_port_names:
-                time.sleep(0.05)
-                _set_port_link(api, snappi_port_name, up=False)
-                logger.info('Shutting down snappi port : {}'.format(snappi_port_name))
-            wait(SNAPPI_TRIGGER, "For links to shutdown")
-        else:
-            required_fanout_mapping = {}
-            fanout_info = t2_uplink_fanout_info[hw_platform]
-            fanout_ip = fanout_info['fanout_ip']
-            for uplink_port in uplink_ports:
-                for port_mapping in fanout_info['port_mapping']:
-                    if uplink_port == port_mapping['uplink_port']:
-                        add_value_to_key(required_fanout_mapping,
-                                         fanout_ip, port_mapping['fanout_port'])
-            flap_fanout_ports(required_fanout_mapping, creds, state='down')
-            wait(DUT_TRIGGER, "For links to shutdown")
 
-                if FANOUT_PRESENCE is False:
+                # Link Down
+                required_fanout_mapping = {}
+                if fanout_presence is False:
                     for snappi_port_name in snappi_port_names:
                         time.sleep(0.05)
-                        ixn_port = ixnetwork.Vport.find(Name=snappi_port_name)[0]
-                        ixn_port.LinkUpDn("down")
+                        _set_port_link(api, snappi_port_name, up=False)
                         logger.info('Shutting down snappi port : {}'.format(snappi_port_name))
                     wait(SNAPPI_TRIGGER, "For links to shutdown")
                 else:
-                    required_fanout_mapping = {}
                     fanout_info = get_uplink_fanout_info(topology_type, vendor)
                     fanout_ip = fanout_info['fanout_ip']
                     for uplink_port in uplink_ports:
@@ -1722,15 +1682,11 @@ def get_convergence_for_blackout(duthosts,
                 logger.info('PACKET LOSS DURATION After Link Down (ms): {}'.format(pkt_loss_duration))
                 avg_pld.append(pkt_loss_duration)
 
-                logger.info('Performing Clear Stats')
-                ixnetwork.ClearStats()
-
                 # Link Up
-                if FANOUT_PRESENCE is False:
+                if fanout_presence is False:
                     for snappi_port_name in snappi_port_names:
                         time.sleep(0.05)
-                        ixn_port = ixnetwork.Vport.find(Name=snappi_port_name)[0]
-                        ixn_port.LinkUpDn("up")
+                        _set_port_link(api, snappi_port_name, up=True)
                         logger.info('Starting up snappi port : {}'.format(snappi_port_name))
                     wait(SNAPPI_TRIGGER, "For links to startup")
                 else:
@@ -1776,41 +1732,7 @@ def get_convergence_for_blackout(duthosts,
                 }
             ])
 
-        delta_frames = 0
-        for i in range(0, len(traffic_type)):
-            delta_frames = delta_frames + flow_stats[i].frames_tx - flow_stats[i].frames_rx
-        pkt_loss_duration = 1000 * (delta_frames / sum_t2_rx_frame_rate)
-        logger.info('Delta Frames : {}'.format(delta_frames))
-        logger.info('PACKET LOSS DURATION  After Link Down (ms): {}'.format(pkt_loss_duration))
-        avg_pld.append(pkt_loss_duration)
-
-        # Link Up
-        if fanout_presence is False:
-            for snappi_port_name in snappi_port_names:
-                time.sleep(0.05)
-                _set_port_link(api, snappi_port_name, up=True)
-                logger.info('Starting up snappi port : {}'.format(snappi_port_name))
-            wait(SNAPPI_TRIGGER, "For links to shutdown")
-        else:
-            flap_fanout_ports(required_fanout_mapping, creds, state='up')
-            wait(DUT_TRIGGER, "For links to startup")
-
-        logger.info('\n')
-        port_stats = get_port_stats(api)
-        logger.info('Rx Snappi Port Name : Rx Frame Rate')
-        for port_stat in port_stats:
-            if 'Snappi_Tx_Port' not in port_stat.name:
-                logger.info('{} : {}'.format(port_stat.name, port_stat.frames_rx_rate))
-                pytest_assert(port_stat.frames_rx_rate > 0, '{} is not receiving any packet'.format(port_stat.name))
-
-        flow_stats = get_flow_stats(api)
-        delta_frames = 0
-        for i in range(0, len(traffic_type)):
-            delta_frames = delta_frames + flow_stats[i].frames_tx - flow_stats[i].frames_rx
-        pkt_loss_duration = 1000 * (delta_frames / sum_t2_rx_frame_rate)
-        logger.info('Delta Frames : {}'.format(delta_frames))
-        logger.info('PACKET LOSS DURATION After Link Up (ms): {}'.format(pkt_loss_duration))
-        avg_pld2.append(pkt_loss_duration)
+    finally:
         logger.info('Stopping Traffic')
         cs = api.control_state()
         cs.traffic.flow_transmit.state = cs.traffic.flow_transmit.STOP
