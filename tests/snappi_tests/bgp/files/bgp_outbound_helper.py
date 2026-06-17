@@ -10,14 +10,16 @@ from tests.common.snappi_tests.snappi_test_params import SnappiTestParams
 from tests.common.utilities import (wait, wait_until)  # noqa: F401
 from tests.common.helpers.assertions import pytest_assert  # noqa: F401
 from tests.common.snappi_tests.snappi_fixtures import create_ip_list  # noqa: F401
-from tests.snappi_tests.variables import T1_SNAPPI_AS_NUM, T2_SNAPPI_AS_NUM, T1_DUT_AS_NUM, T2_DUT_AS_NUM, t1_ports, \
-     t2_uplink_portchannel_members, t1_t2_dut_ipv4_list, v4_prefix_length, \
-     t1_t2_dut_ipv6_list, t1_t2_snappi_ipv4_list, t1_t2_device_hostnames, portchannel_count, \
-     t1_t2_snappi_ipv6_list, t2_dut_portchannel_ipv4_list, t2_dut_portchannel_ipv6_list, \
-     snappi_portchannel_ipv4_list, snappi_portchannel_ipv6_list, AS_PATHS, BGP_TYPE, \
-     snappi_community_for_t1, snappi_community_for_t1_drop, snappi_community_for_t2, num_regionalhubs,  \
-     SNAPPI_TRIGGER, DUT_TRIGGER, DUT_TRIGGER_SHORT, fanout_presence, t2_uplink_fanout_info  # noqa: F401
-from tests.common.snappi_tests.variables import v6_prefix_length
+from tests.snappi_tests.variables import (
+    AS_PATHS, BGP_TYPE, SNAPPI_TRIGGER, DUT_TRIGGER, DUT_TRIGGER_SHORT, FANOUT_PRESENCE,
+    NUM_REGIONAL_HUBS,
+    COMMUNITY_LOWER_TIER_LEAK, COMMUNITY_LOWER_TIER_DROP, COMMUNITY_UPPER_TIER,
+    V4_PREFIX_LENGTH, V6_PREFIX_LENGTH,
+    detect_topology_and_vendor,
+    get_lower_tier_info,
+    get_uplink_fanout_info, get_uplink_portchannel_members,
+    get_as_numbers, get_bgp_ips_for_topology,
+)
 
 logger = logging.getLogger(__name__)
 total_routes = 0
@@ -912,7 +914,7 @@ def get_convergence_for_link_flap(duthosts,
             flap_dut_port(creds, flap_details['device_ip'], flap_details['port_name'], state='down')
             wait(DUT_TRIGGER, "For link to shutdown")
         elif 'Ixia' == flap_details['device_name']:
-            if fanout_presence is False:
+            if FANOUT_PRESENCE is False:
                 _set_port_link(api, flap_details['port_name'], up=False)
                 logger.info('Shutting down snappi port : {}'.format(flap_details['port_name']))
                 wait(SNAPPI_TRIGGER, "For link to shutdown")
@@ -962,7 +964,7 @@ def get_convergence_for_link_flap(duthosts,
             flap_dut_port(creds, flap_details['device_ip'], flap_details['port_name'], state='up')
             wait(DUT_TRIGGER, "For link to startup")
         elif 'Ixia' == flap_details['device_name']:
-            if fanout_presence is False:
+            if FANOUT_PRESENCE is False:
                 _set_port_link(api, flap_details['port_name'], up=True)
                 logger.info('Starting up snappi port : {}'.format(flap_details['port_name']))
                 wait(SNAPPI_TRIGGER, "For link to startup")
@@ -1650,7 +1652,7 @@ def get_convergence_for_blackout(duthosts,
 
                 # Link Down
                 required_fanout_mapping = {}
-                if fanout_presence is False:
+                if FANOUT_PRESENCE is False:
                     for snappi_port_name in snappi_port_names:
                         time.sleep(0.05)
                         _set_port_link(api, snappi_port_name, up=False)
@@ -1683,7 +1685,7 @@ def get_convergence_for_blackout(duthosts,
                 avg_pld.append(pkt_loss_duration)
 
                 # Link Up
-                if fanout_presence is False:
+                if FANOUT_PRESENCE is False:
                     for snappi_port_name in snappi_port_names:
                         time.sleep(0.05)
                         _set_port_link(api, snappi_port_name, up=True)
