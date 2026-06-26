@@ -11,7 +11,7 @@ pytestmark = [pytest.mark.topology('tgen')]
 
 @pytest.mark.parametrize('port_count', [4])
 @pytest.mark.parametrize('number_of_routes', [1000])
-@pytest.mark.parametrize('iterations', [1])
+@pytest.mark.parametrize('iterations', [5])
 def test_lacp_add_remove_link_physically(snappi_api,                   # noqa: F811
                                          duthost,
                                          setup_bgp_testbed,   # noqa: F811
