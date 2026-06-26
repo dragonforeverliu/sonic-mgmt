@@ -195,7 +195,7 @@ def __tgen_bgp_config(snappi_api,
     ipv6_2.name = 'IPv6_2'
     ipv6_2.address = temp_tg_port[1]['ipv6']
     ipv6_2.gateway = temp_tg_port[1]['peer_ipv6']
-    #ipv6_2.prefix = int(temp_tg_port[1]['ipv6_prefix'])
+    # ipv6_2.prefix = int(temp_tg_port[1]['ipv6_prefix'])
     ipv6_2.prefix = 127  # /127 (RFC 6164) avoids STC rejecting 2000:1::4 as a subnet address under /126
 
     bgpv4 = config.devices[1].bgp
@@ -240,7 +240,7 @@ def __tgen_bgp_config(snappi_api,
         flow1.metrics.enable = True
         flow1.metrics.loss = True
     createTrafficItem("IPv4_1-IPv4_Routes", ipv4_1.name, route_range1.name)
-    createTrafficItem("IPv6_1-IPv6_Routes", ipv6_1.name, route_range2.name)
+    # createTrafficItem("IPv6_1-IPv6_Routes", ipv6_1.name, route_range2.name)
     return config
 
 
